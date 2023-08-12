@@ -11,7 +11,7 @@ commands:
     usage: /<command>
   re:
     description: Access to the claim transaction information.
-    usage: /<command>
+    usage: /<command> [subcommand] [args]
     aliases: [realestate]
     permission: realestate.info
     permission-message: You do not have access to that command!

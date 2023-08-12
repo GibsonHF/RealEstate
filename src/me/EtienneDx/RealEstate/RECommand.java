@@ -7,6 +7,9 @@ import java.util.UUID;
 
 import me.EtienneDx.RealEstate.Transactions.*;
 import org.bukkit.*;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Sign;
+import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -109,6 +112,25 @@ public class RECommand extends BaseCommand
 		return transactions;
 	}
 
+	private boolean createAndWriteSign(Location location, String... lines) {
+		// Check if the block at the location is air or replaceable
+		if (location.getBlock().getType() == Material.AIR) {
+			// Set the block to a sign
+			location.getBlock().setType(Material.OAK_WALL_SIGN); // or another sign type
+			BlockState state = location.getBlock().getState();
+			if (state instanceof Sign) {
+				Sign sign = (Sign) state;
+				for (int i = 0; i < lines.length && i < 4; i++) {
+					sign.setLine(i, lines[i]);
+				}
+				sign.update();
+				return true;
+			}
+		}
+		return false;
+	}
+
+
 	private static void populateGUI(ArrayList<Transaction> transactions, Inventory inv)
 	{
 
@@ -124,7 +146,7 @@ public class RECommand extends BaseCommand
 			ItemStack item = new ItemStack(Material.OAK_SIGN);
 			ItemMeta meta = item.getItemMeta();
 
-			if (tr.getHolder() != null)
+			if (tr.getHolder().getLocation() != null)
 				continue; // Skip if the claim is no longer valid
 			// Set the display name as the claim's ID (You need to implement getClaimId() based on your data structure)
 			Claim claimForTransaction = GriefPrevention.instance.dataStore.getClaimAt(tr.getHolder().getLocation(), false, null);
@@ -208,7 +230,70 @@ public class RECommand extends BaseCommand
 		return Bukkit.getOfflinePlayer(tr.getOwner()).getName();
 	}
 
+	@Subcommand("offer")
+	@Description("Puts the claim you're standing in up for rent/sale.")
+	@CommandCompletion("@offers")
+	@Syntax("<rent/sell> <price> [days if rented]")
+	public void onOffer(Player player, String type, double price, @Optional Integer days) {
+		// Check the type
+		if (!type.equalsIgnoreCase("rent") && !type.equalsIgnoreCase("sell")) {
+			player.sendMessage(ChatColor.RED + "Invalid type! Use 'rent' or 'sell'.");
+			return;
+		}
 
+		// Check if the type is rent and days is provided
+		if (type.equalsIgnoreCase("rent") && days == null) {
+			player.sendMessage(ChatColor.RED + "You must specify the number of days for rent.");
+			return;
+		}
+
+		// Get the claim the player is standing in
+		Claim claim = GriefPrevention.instance.dataStore.getClaimAt(player.getLocation(), false, null);
+		if (claim == null) {
+			player.sendMessage(ChatColor.RED + "You're not standing in a claim!");
+			return;
+		}
+
+		// Check if the claim is already up for sale/rent
+		if (RealEstate.transactionsStore.claimRent.containsKey(claim.getID()) || RealEstate.transactionsStore.claimSell.containsKey(claim.getID())) {
+			player.sendMessage(ChatColor.RED + "This claim is already up for sale/rent!");
+			return;
+		}
+		// ... (based on your data structures)
+
+
+		if (type.equalsIgnoreCase("rent")) {
+			// You'd need to determine the values for sign, rentPeriods, and buildTrust based on your application's needs.
+			Location signLocation = player.getLocation();  // or wherever you place the sign
+			int rentPeriods = 1;  // Adjust this as needed
+			boolean buildTrust = false;  // Adjust this as needed
+
+			// Create a new ClaimRent object
+			ClaimRent rentTransaction = new ClaimRent(claim, player, price, signLocation, days, rentPeriods, buildTrust);
+
+			// Add it to the transactions
+			RealEstate.transactionsStore.claimRent.put(claim.getID().toString(), rentTransaction);
+
+			player.sendMessage(ChatColor.GREEN + "Claim has been put up for rent for " + days + " days at a price of " + price + "!");
+
+		} else if (type.equalsIgnoreCase("sell")) {
+			Location signLocation = player.getLocation(); // Placeholder; determine where you want the sign to be or how to get its location.
+			ClaimSell sellTransaction = new ClaimSell(claim, player, price, signLocation);
+
+			// Add the ClaimSell transaction to the store
+			RealEstate.transactionsStore.claimSell.put(claim.getID().toString(), sellTransaction);
+
+			// Provide feedback to the player
+			player.sendMessage(ChatColor.GREEN + "You've put up your claim for sale at a price of " + price);
+		}
+
+
+
+
+
+
+		player.sendMessage(ChatColor.GREEN + "Claim has been put up for " + type + "!");
+	}
 
 	@Subcommand("renewrent")
 	@Description("Allows the player renting a claim or subclaim to enable or disable the automatic renew of his rent")
