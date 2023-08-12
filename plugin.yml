@@ -1,11 +1,14 @@
 name: RealEstate
 main: me.EtienneDx.RealEstate.RealEstate
 version: ${project.version}
-authors: [EtienneDx, DmitryRendov]
+authors: [EtienneDx, DmitryRendov, gibson]
 depend: [Vault, GriefPrevention]
 api-version: "1.18"
 
 commands:
+  rentclaim:
+    description: Rent the claim you are standing in.
+    usage: /<command>
   re:
     description: Access to the claim transaction information.
     usage: /<command>

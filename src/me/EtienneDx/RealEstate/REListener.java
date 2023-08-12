@@ -1,10 +1,16 @@
 package me.EtienneDx.RealEstate;
 
+import java.util.HashMap;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import me.EtienneDx.RealEstate.Transactions.ClaimRent;
+import me.EtienneDx.RealEstate.Transactions.ClaimSell;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -12,8 +18,12 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.PluginManager;
 
 import me.EtienneDx.RealEstate.Transactions.Transaction;
@@ -22,6 +32,7 @@ import me.ryanhamshire.GriefPrevention.GriefPrevention;
 
 public class REListener implements Listener
 {
+	public HashMap<UUID, Transaction> currentTransactions = new HashMap<>();
 	void registerEvents()
 	{
 		PluginManager pm = RealEstate.instance.getServer().getPluginManager();
@@ -143,7 +154,7 @@ public class REListener implements Listener
 				}
 
 				// we should be good to sell it now
-				event.setCancelled(true);// need to cancel the event, so we can update the sign elsewhere
+				//event.setCancelled(true);// need to cancel the event, so we can update the sign elsewhere
 				RealEstate.transactionsStore.sell(claim, claim.isAdminClaim() ? null : player, price, event.getBlock().getLocation());
 			}
 			else if(RealEstate.instance.config.cfgRentKeywords.contains(event.getLine(0).toLowerCase()) ||
@@ -256,11 +267,11 @@ public class REListener implements Listener
 				}
 
 				// all should be good, we can create the rent
-				event.setCancelled(true);
+				//event.setCancelled(true);
 				RealEstate.transactionsStore.rent(claim, player, price, event.getBlock().getLocation(), duration, rentPeriods,
 						RealEstate.instance.config.cfgRentKeywords.contains(event.getLine(0).toLowerCase()));
 			}
-			else if(RealEstate.instance.config.cfgLeaseKeywords.contains(event.getLine(0).toLowerCase()))// we want to rent it
+			else if(RealEstate.instance.config.cfgLeaseKeywords.contains(event.getLine(0).toLowerCase()))// we want to lease it
 			{
 				if(!RealEstate.instance.config.cfgEnableLease)
 				{
@@ -361,7 +372,7 @@ public class REListener implements Listener
 				}
 
 				// all should be good, we can create the rent
-				event.setCancelled(true);
+				//event.setCancelled(true);
 				RealEstate.transactionsStore.lease(claim, player, price, event.getBlock().getLocation(), frequency, paymentsCount);
 			}
 		}
@@ -383,6 +394,47 @@ public class REListener implements Listener
 		return 0;
 	}
 
+	@EventHandler
+	public void onInventoryClick(InventoryClickEvent event) {
+		ItemStack clickedItem = event.getCurrentItem();
+		Player player = (Player) event.getWhoClicked();
+		if (clickedItem == null) return;
+		if (event.getWhoClicked() instanceof Player) {
+			if (event.getView().getTitle().equals("Real Estate Listings")) {
+				event.setCancelled(true);
+
+				if (clickedItem != null && clickedItem.getType() == Material.OAK_SIGN) {
+					// Extract Claim ID from the clicked item
+					String displayName = ChatColor.stripColor(clickedItem.getItemMeta().getDisplayName());
+					String claimIDStr = displayName.replace("Claim ID: ", "").trim();
+					long claimID = Long.parseLong(claimIDStr);
+
+					Transaction tr = null;
+					if (event.isLeftClick()) {
+
+						Claim claim = GriefPrevention.instance.dataStore.getClaim(claimID);
+						if (claim != null) {
+							Location location = claim.getGreaterBoundaryCorner(); // or choose another location within the claim
+							// Ensure the player is above the ground
+							while (location.getBlock().getType() != Material.AIR || location.add(0, 1, 0).getBlock().getType() != Material.AIR) {
+								location.add(0, 1, 0); // Move one block up
+							}
+
+							player.teleport(location);
+							player.sendMessage(ChatColor.GREEN + "Teleported to claim ID: " + claimIDStr);
+
+						} else {
+							player.sendMessage(ChatColor.RED + "Claim ID: " + claimIDStr + " not found.");
+						}
+					}
+
+
+				}
+			}
+		}
+
+	}
+
 	private double getDouble(SignChangeEvent event, int line, double defaultValue) throws NumberFormatException
 	{
 		if(event.getLine(line).isEmpty())// if no price precised, make it the default one
@@ -395,7 +447,7 @@ public class REListener implements Listener
 	@EventHandler
 	public void onPlayerInteract(PlayerInteractEvent event)
 	{
-		if(event.getAction().equals(Action.RIGHT_CLICK_BLOCK) && event.getHand().equals(EquipmentSlot.HAND) &&
+		if(event.getAction().equals(Action.LEFT_CLICK_BLOCK) && event.getHand().equals(EquipmentSlot.HAND) &&
 				event.getClickedBlock().getState() instanceof Sign)
 		{
 			Sign sign = (Sign)event.getClickedBlock().getState();
@@ -416,9 +468,6 @@ public class REListener implements Listener
 				}
 
 				Transaction tr = RealEstate.transactionsStore.getTransaction(claim);
-				if(player.isSneaking())
-					tr.preview(player);
-				else
 					tr.interact(player);
 			}
 		}

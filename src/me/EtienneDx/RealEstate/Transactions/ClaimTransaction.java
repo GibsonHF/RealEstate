@@ -18,7 +18,11 @@ public abstract class ClaimTransaction implements ConfigurationSerializable, Tra
 	public UUID owner = null;
 	public double price;
 	public Location sign = null;
-	
+
+	public double getPrice() {
+		return price;
+	}
+
 	public ClaimTransaction(Claim claim, Player player, double price, Location sign)
 	{
 		this.claimId = claim.getID().longValue();

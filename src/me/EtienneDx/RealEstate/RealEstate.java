@@ -113,6 +113,7 @@ public class RealEstate extends JavaPlugin
         manager.enableUnstableAPI("help");
         registerConditions();
         manager.registerCommand(new RECommand());
+		this.getCommand("rentclaim").setExecutor(new RentCommandExecutor());
 
 		copyResourcesIntoPluginDirectory();
 	}

@@ -1,11 +1,12 @@
 package me.EtienneDx.RealEstate;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.OfflinePlayer;
+import me.EtienneDx.RealEstate.Transactions.*;
+import org.bukkit.*;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -23,12 +24,11 @@ import co.aikar.commands.annotation.HelpCommand;
 import co.aikar.commands.annotation.Optional;
 import co.aikar.commands.annotation.Subcommand;
 import co.aikar.commands.annotation.Syntax;
-import me.EtienneDx.RealEstate.Transactions.BoughtTransaction;
-import me.EtienneDx.RealEstate.Transactions.ClaimRent;
-import me.EtienneDx.RealEstate.Transactions.ExitOffer;
-import me.EtienneDx.RealEstate.Transactions.Transaction;
 import me.ryanhamshire.GriefPrevention.Claim;
 import me.ryanhamshire.GriefPrevention.GriefPrevention;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 
 @CommandAlias("re|realestate")
 public class RECommand extends BaseCommand
@@ -51,100 +51,165 @@ public class RECommand extends BaseCommand
 		}
 
 	}
-	
+
 	@Subcommand("list")
-	@Description("Displays the list of all real estate offers currently existing")
+	@Description("Displays the list of all real estate offers currently existing in a GUI")
 	@CommandCompletion("all|sell|rent|lease")
 	@Syntax("[all|sell|rent|lease] <page>")
 	public static void list(CommandSender sender, @Optional String type, @Default("1") int page)
 	{
-		Player player = null;
-		if (sender instanceof Player) {
-			player = (Player) sender;
-		}
-		if(page <= 0)
+		if (!(sender instanceof Player))
 		{
-			Messages.sendMessage(player, RealEstate.instance.messages.msgPageMustBePositive);
+			Messages.sendMessage(sender, "This command can only be used by a player.");
 			return;
 		}
-		int count = 0;
-		int start = (page - 1) * RealEstate.instance.config.cfgPageSize;
-		String typeMsg;
+
+		Player player = (Player) sender;
+
+		// Get the relevant transactions based on the type
+		ArrayList<Transaction> transactions = getRelevantTransactions(type);
+
+		if(transactions.isEmpty())
+		{
+			Messages.sendMessage(player, RealEstate.instance.messages.msgNoTransactionFound);
+			return;
+		}
+
+		// Create and populate the GUI
+		Inventory inv = Bukkit.createInventory(null, 54, "Real Estate Listings");
+		populateGUI(transactions, inv);
+
+		// Open the GUI for the player
+		player.openInventory(inv);
+	}
+
+	private static ArrayList<Transaction> getRelevantTransactions(String type)
+	{
+		ArrayList<Transaction> transactions = new ArrayList<Transaction>();
+
 		if(type == null || type.equalsIgnoreCase("all"))
 		{
-			count = RealEstate.transactionsStore.claimSell.values().size() + RealEstate.transactionsStore.claimRent.values().size() +
-					RealEstate.transactionsStore.claimLease.values().size();
-			typeMsg = "Real Estate offers";
+			transactions.addAll(RealEstate.transactionsStore.claimSell.values());
+			transactions.addAll(RealEstate.transactionsStore.claimRent.values());
+			transactions.addAll(RealEstate.transactionsStore.claimLease.values());
 		}
 		else if(type.equalsIgnoreCase("sell"))
 		{
-			count = RealEstate.transactionsStore.claimSell.values().size();
-			typeMsg = "Sell offers";
+			transactions.addAll(RealEstate.transactionsStore.claimSell.values());
 		}
 		else if(type.equalsIgnoreCase("rent"))
 		{
-			count = RealEstate.transactionsStore.claimRent.values().size();
-			typeMsg = "Rent offers";
+			transactions.addAll(RealEstate.transactionsStore.claimRent.values());
 		}
 		else if(type.equalsIgnoreCase("lease"))
 		{
-			count = RealEstate.transactionsStore.claimLease.values().size();
-			typeMsg = "Lease offers";
+			transactions.addAll(RealEstate.transactionsStore.claimLease.values());
 		}
-		else
+
+		return transactions;
+	}
+
+	private static void populateGUI(ArrayList<Transaction> transactions, Inventory inv)
+	{
+
+		for (Transaction tr : transactions)
 		{
-			Messages.sendMessage(sender, RealEstate.instance.messages.msgErrorInvalidOption);
-			return;
-		}
-		if(count == 0)
-		{
-			Messages.sendMessage(sender, RealEstate.instance.messages.msgNoTransactionFound);
-		}
-		else
-		{
-			ArrayList<Transaction> transactions = new ArrayList<Transaction>(count);
-			if(type == null || type.equalsIgnoreCase("all"))
-			{
-				transactions.addAll(RealEstate.transactionsStore.claimSell.values());
-				transactions.addAll(RealEstate.transactionsStore.claimRent.values());
-				transactions.addAll(RealEstate.transactionsStore.claimLease.values());
-			}
-			else if(type.equalsIgnoreCase("sell"))
-			{
-				transactions.addAll(RealEstate.transactionsStore.claimSell.values());
-			}
-			else if(type.equalsIgnoreCase("rent"))
-			{
-				transactions.addAll(RealEstate.transactionsStore.claimRent.values());
-			}
-			else if(type.equalsIgnoreCase("lease"))
-			{
-				transactions.addAll(RealEstate.transactionsStore.claimLease.values());
-			}
-			
-			int max = Math.min(start + RealEstate.instance.config.cfgPageSize, count);
-			if(start <= max)
-			{
-				int pageCount = (int)Math.ceil(count / (double)RealEstate.instance.config.cfgPageSize);
-				Messages.sendMessage(sender, RealEstate.instance.messages.msgListTransactionsHeader, 
-						typeMsg, String.valueOf(page), String.valueOf(pageCount));
-				for(int i = start; i < max; i++)
-				{
-					RealEstate.instance.log.info("transaction " + i);
-					transactions.get(i).msgInfo(sender);
-				}
-				if(page < pageCount)
-				{
-					Messages.sendMessage(sender, RealEstate.instance.messages.msgListNextPage, (type != null ? type : "all"), String.valueOf(page + 1));
+			if (tr instanceof ClaimRent) {
+				ClaimRent rentTransaction = (ClaimRent) tr;
+				if (rentTransaction.buyer != null) {
+					continue;  // Property is currently rented, skip
 				}
 			}
-			else
-			{
-				Messages.sendMessage(sender, RealEstate.instance.messages.msgPageNotExists);
+			// Create the item
+			ItemStack item = new ItemStack(Material.OAK_SIGN);
+			ItemMeta meta = item.getItemMeta();
+
+			if (tr.getHolder() != null)
+				continue; // Skip if the claim is no longer valid
+			// Set the display name as the claim's ID (You need to implement getClaimId() based on your data structure)
+			Claim claimForTransaction = GriefPrevention.instance.dataStore.getClaimAt(tr.getHolder().getLocation(), false, null);
+			meta.setDisplayName(ChatColor.DARK_AQUA + "Claim ID: "+ ChatColor.WHITE + claimForTransaction.getID()); // If getID() exists
+
+			// Get price and owner from the transaction
+			String transactionType;
+			double price = getPriceFromTransaction(tr);
+			String owner = getOwnerFromTransaction(tr);
+			if (tr instanceof ClaimRent) {
+				transactionType = "Rent";
+				price = ((ClaimRent) tr).price;
+			} else if (tr instanceof ClaimSell) {
+				transactionType = "Sell";
+				price = ((ClaimSell) tr).price;
+			} else if (tr instanceof ClaimLease) {
+				transactionType = "Lease";
+				price = ((ClaimLease) tr).price;
+			} else {
+				transactionType = "Unknown"; // Default case, should ideally never hit this
 			}
+
+			// Set the lore with owner, price, and interaction instructions
+			List<String> lore = Arrays.asList(
+					ChatColor.GOLD+"Type: " + transactionType,
+					ChatColor.WHITE + "Owner: " + owner,
+					ChatColor.YELLOW+"Price: " + price,
+					ChatColor.GOLD + "Left-Click to teleport",
+					ChatColor.AQUA + "Claim Size: "+ ChatColor.WHITE + claimForTransaction.getArea() +" blocks"
+			);
+
+			meta.setLore(lore);
+			item.setItemMeta(meta);
+
+			inv.addItem(item);
 		}
 	}
-	
+
+	public static Transaction getTransactionByName(String claimName) {
+		List<Transaction> allTransactions = new ArrayList<>();
+		allTransactions.addAll(RealEstate.transactionsStore.claimSell.values());
+		allTransactions.addAll(RealEstate.transactionsStore.claimRent.values());
+		allTransactions.addAll(RealEstate.transactionsStore.claimLease.values());
+
+		for (Transaction tr : allTransactions) {
+			if (getOwnerFromTransaction(tr).equals(claimName)) {
+				return tr;
+			}
+		}
+		return null;
+	}
+
+
+	// Helper function to get the price based on transaction type
+	private static double getPriceFromTransaction(Transaction tr)
+	{
+		// You need to determine how you extract or calculate the price from the transaction object
+		if (tr instanceof ClaimRent)
+		{
+			return ((ClaimRent) tr).price;
+		}
+		else if (tr instanceof ClaimSell)
+		{
+			return ((ClaimSell) tr).price;
+		}
+		else if (tr instanceof ClaimLease)
+		{
+			return ((ClaimLease) tr).price;
+		}
+		return 0; // Default value if no match
+	}
+
+	// Helper function to get the owner of the claim
+	private static String getOwnerFromTransaction(Transaction tr)
+	{
+		// This is just a placeholder, you need to adjust based on your data structure
+		if (tr.getOwner() == null)
+		{
+			return "Admin";  // Placeholder for an admin claim
+		}
+		return Bukkit.getOfflinePlayer(tr.getOwner()).getName();
+	}
+
+
+
 	@Subcommand("renewrent")
 	@Description("Allows the player renting a claim or subclaim to enable or disable the automatic renew of his rent")
 	@Conditions("partOfRent")

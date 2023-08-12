@@ -10,6 +10,7 @@ import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.World;
 import org.bukkit.block.Sign;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -479,10 +480,29 @@ public class ClaimRent extends BoughtTransaction
 	public void msgInfo(CommandSender cs)
 	{
 		Claim claim = GriefPrevention.instance.dataStore.getClaimAt(sign, false, null);
-		String location = "[" + claim.getLesserBoundaryCorner().getWorld().getName() + ", " +
-		"X: " + claim.getLesserBoundaryCorner().getBlockX() + ", " +
-		"Y: " + claim.getLesserBoundaryCorner().getBlockY() + ", " +
-		"Z: " + claim.getLesserBoundaryCorner().getBlockZ() + "]";
+
+		if (claim == null) {
+			// Handle the error, e.g., log a message or throw an exception.
+			System.err.println("Claim not found at specified location.");
+			return; // or handle differently based on your needs
+		}
+
+		Location corner = claim.getLesserBoundaryCorner();
+		if (corner == null) {
+			System.err.println("Claim has no lesser boundary corner.");
+			return; // or handle differently
+		}
+
+		World world = corner.getWorld();
+		if (world == null) {
+			System.err.println("Location is not associated with a world.");
+			return; // or handle differently
+		}
+
+		String location = "[" + world.getName() +
+				", X: " + corner.getBlockX() +
+				", Y: " + corner.getBlockY() +
+				", Z: " + corner.getBlockZ() + "]";
 
 		Messages.sendMessage(cs, RealEstate.instance.messages.msgInfoClaimInfoRentOneline,
 				claim.getArea() + "",
